@@ -16,7 +16,6 @@
 			<li><a href="/">Dashboard</a></li>
 			<li><a href="/accounts">Accounts</a></li>
 			<li><a href="/transactions">Transactions</a></li>
-			<li><a href="/tags">Tags</a></li>
 		</ul>
 	</div>
 </nav>

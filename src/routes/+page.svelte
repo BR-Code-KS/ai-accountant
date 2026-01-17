@@ -4,11 +4,7 @@
 	let accounts = $state([]);
 	let recentTransactions = $state([]);
 	let loading = $state(true);
-	let stats = $state({
-		totalAssets: 0,
-		totalIncome: 0,
-		totalExpenses: 0
-	});
+	let statsByCurrency = $state({});
 
 	onMount(async () => {
 		await loadData();
@@ -38,17 +34,32 @@
 	}
 
 	function calculateStats() {
-		stats.totalAssets = accounts
-			.filter(a => a.type === 'asset')
-			.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
+		const currencyGroups = {};
 
-		stats.totalIncome = accounts
-			.filter(a => a.type === 'income')
-			.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
+		// Group accounts by currency and calculate totals
+		accounts.forEach(account => {
+			const currency = account.currency || 'USD';
+			if (!currencyGroups[currency]) {
+				currencyGroups[currency] = {
+					totalIncome: 0,
+					totalExpenses: 0
+				};
+			}
 
-		stats.totalExpenses = accounts
-			.filter(a => a.type === 'expense')
-			.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
+			const balance = parseFloat(account.balance || 0);
+			if (account.type === 'income') {
+				currencyGroups[currency].totalIncome += balance;
+			} else if (account.type === 'expense') {
+				currencyGroups[currency].totalExpenses += balance;
+			}
+		});
+
+		// Filter out currencies with zero balances across all categories
+		statsByCurrency = Object.fromEntries(
+			Object.entries(currencyGroups).filter(([_, stats]) =>
+				stats.totalIncome !== 0 || stats.totalExpenses !== 0
+			)
+		);
 	}
 
 	function formatCurrency(amount, currency = 'USD') {
@@ -69,21 +80,26 @@
 	{#if loading}
 		<p>Loading...</p>
 	{:else}
-		<!-- Statistics Cards -->
-		<div class="stats-grid">
-			<div class="stat-card">
-				<h3>Total Assets</h3>
-				<div class="value">{formatCurrency(stats.totalAssets)}</div>
-			</div>
-			<div class="stat-card">
-				<h3>Total Income</h3>
-				<div class="value" style="color: #10b981;">{formatCurrency(stats.totalIncome)}</div>
-			</div>
-			<div class="stat-card">
-				<h3>Total Expenses</h3>
-				<div class="value" style="color: #ef4444;">{formatCurrency(stats.totalExpenses)}</div>
-			</div>
-		</div>
+		<!-- Statistics Cards by Currency -->
+		{#if Object.keys(statsByCurrency).length === 0}
+			<p>No account data available. <a href="/accounts">Create your first account</a></p>
+		{:else}
+			{#each Object.entries(statsByCurrency) as [currency, stats]}
+				<div class="card" style="margin-bottom: 2rem;">
+					<h2>{currency} Summary</h2>
+					<div class="stats-grid">
+						<div class="stat-card">
+							<h3>Total Income</h3>
+							<div class="value" style="color: #10b981;">{formatCurrency(stats.totalIncome, currency)}</div>
+						</div>
+						<div class="stat-card">
+							<h3>Total Expenses</h3>
+							<div class="value" style="color: #ef4444;">{formatCurrency(stats.totalExpenses, currency)}</div>
+						</div>
+					</div>
+				</div>
+			{/each}
+		{/if}
 
 		<!-- Accounts Overview -->
 		<div class="card">
@@ -100,8 +116,8 @@
 							{#if account.tags && account.tags.length > 0}
 								<div style="margin-top: 0.75rem;">
 									{#each account.tags as tag}
-										<span class="tag" style="background-color: {tag.color}20; color: {tag.color};">
-											{tag.name}
+										<span class="tag" style="background-color: #3b82f620; color: #3b82f6;">
+											{tag}
 										</span>
 									{/each}
 								</div>

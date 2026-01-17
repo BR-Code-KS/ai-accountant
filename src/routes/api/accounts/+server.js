@@ -5,63 +5,37 @@ import { supabase } from '$lib/supabase.js';
 export async function GET() {
   const { data: accounts, error } = await supabase
     .from('accounts')
-    .select(`
-      *,
-      account_tags (
-        tag_id,
-        tags (*)
-      )
-    `)
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (error) {
     return json({ error: error.message }, { status: 500 });
   }
 
-  // Transform the data to have a cleaner structure
-  const transformedAccounts = accounts.map(account => ({
-    ...account,
-    tags: account.account_tags.map(at => at.tags)
-  }));
-
-  return json(transformedAccounts);
+  return json(accounts);
 }
 
 // POST create new account
 export async function POST({ request }) {
   const body = await request.json();
-  const { name, type, currency, description, tagIds } = body;
+  const { name, type, currency, balance, description, tags } = body;
 
-  // Insert account
+  // Insert account with tags as simple array
   const { data: account, error: accountError } = await supabase
     .from('accounts')
     .insert({
       name,
       type,
       currency: currency || 'USD',
-      description
+      balance: balance || 0,
+      description,
+      tags: tags || []
     })
     .select()
     .single();
 
   if (accountError) {
     return json({ error: accountError.message }, { status: 500 });
-  }
-
-  // Add tags if provided
-  if (tagIds && tagIds.length > 0) {
-    const accountTags = tagIds.map(tagId => ({
-      account_id: account.id,
-      tag_id: tagId
-    }));
-
-    const { error: tagsError } = await supabase
-      .from('account_tags')
-      .insert(accountTags);
-
-    if (tagsError) {
-      return json({ error: tagsError.message }, { status: 500 });
-    }
   }
 
   return json(account, { status: 201 });
