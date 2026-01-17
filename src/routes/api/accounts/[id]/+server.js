@@ -5,13 +5,7 @@ import { supabase } from '$lib/supabase.js';
 export async function GET({ params }) {
   const { data: account, error } = await supabase
     .from('accounts')
-    .select(`
-      *,
-      account_tags (
-        tag_id,
-        tags (*)
-      )
-    `)
+    .select('*')
     .eq('id', params.id)
     .single();
 
@@ -19,27 +13,24 @@ export async function GET({ params }) {
     return json({ error: error.message }, { status: 500 });
   }
 
-  const transformedAccount = {
-    ...account,
-    tags: account.account_tags.map(at => at.tags)
-  };
-
-  return json(transformedAccount);
+  return json(account);
 }
 
 // PUT update account
 export async function PUT({ params, request }) {
   const body = await request.json();
-  const { name, type, currency, description, tagIds } = body;
+  const { name, type, currency, balance, description, tags } = body;
 
-  // Update account
+  // Update account with tags as simple array
   const { data: account, error: accountError } = await supabase
     .from('accounts')
     .update({
       name,
       type,
       currency,
+      balance,
       description,
+      tags: tags || [],
       updated_at: new Date().toISOString()
     })
     .eq('id', params.id)
@@ -48,31 +39,6 @@ export async function PUT({ params, request }) {
 
   if (accountError) {
     return json({ error: accountError.message }, { status: 500 });
-  }
-
-  // Update tags if provided
-  if (tagIds !== undefined) {
-    // Delete existing tags
-    await supabase
-      .from('account_tags')
-      .delete()
-      .eq('account_id', params.id);
-
-    // Add new tags
-    if (tagIds.length > 0) {
-      const accountTags = tagIds.map(tagId => ({
-        account_id: params.id,
-        tag_id: tagId
-      }));
-
-      const { error: tagsError } = await supabase
-        .from('account_tags')
-        .insert(accountTags);
-
-      if (tagsError) {
-        return json({ error: tagsError.message }, { status: 500 });
-      }
-    }
   }
 
   return json(account);

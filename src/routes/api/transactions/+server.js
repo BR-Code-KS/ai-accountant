@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { supabase } from '$lib/supabase.js';
 
-// GET all transactions with account and tag details
+// GET all transactions with account details
 export async function GET({ url }) {
   const accountId = url.searchParams.get('accountId');
   const type = url.searchParams.get('type');
@@ -11,11 +11,7 @@ export async function GET({ url }) {
     .select(`
       *,
       from_account:from_account_id (id, name, currency),
-      to_account:to_account_id (id, name, currency),
-      transaction_tags (
-        tag_id,
-        tags (*)
-      )
+      to_account:to_account_id (id, name, currency)
     `)
     .order('transaction_date', { ascending: false });
 
@@ -35,19 +31,13 @@ export async function GET({ url }) {
     return json({ error: error.message }, { status: 500 });
   }
 
-  // Transform the data
-  const transformedTransactions = transactions.map(transaction => ({
-    ...transaction,
-    tags: transaction.transaction_tags.map(tt => tt.tags)
-  }));
-
-  return json(transformedTransactions);
+  return json(transactions);
 }
 
 // POST create new transaction
 export async function POST({ request }) {
   const body = await request.json();
-  const { type, amount, fromAccountId, toAccountId, description, transactionDate, tagIds } = body;
+  const { type, amount, fromAccountId, toAccountId, description, transactionDate, tags } = body;
 
   // Validate transaction type and required fields
   if (type === 'deposit' && !toAccountId) {
@@ -60,7 +50,7 @@ export async function POST({ request }) {
     return json({ error: 'Transfer requires both from_account_id and to_account_id' }, { status: 400 });
   }
 
-  // Insert transaction
+  // Insert transaction with tags as simple array
   const { data: transaction, error: transactionError } = await supabase
     .from('transactions')
     .insert({
@@ -69,29 +59,14 @@ export async function POST({ request }) {
       from_account_id: fromAccountId,
       to_account_id: toAccountId,
       description,
-      transaction_date: transactionDate
+      transaction_date: transactionDate,
+      tags: tags || []
     })
     .select()
     .single();
 
   if (transactionError) {
     return json({ error: transactionError.message }, { status: 500 });
-  }
-
-  // Add tags if provided
-  if (tagIds && tagIds.length > 0) {
-    const transactionTags = tagIds.map(tagId => ({
-      transaction_id: transaction.id,
-      tag_id: tagId
-    }));
-
-    const { error: tagsError } = await supabase
-      .from('transaction_tags')
-      .insert(transactionTags);
-
-    if (tagsError) {
-      return json({ error: tagsError.message }, { status: 500 });
-    }
   }
 
   return json(transaction, { status: 201 });

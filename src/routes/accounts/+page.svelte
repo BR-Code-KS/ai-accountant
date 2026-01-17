@@ -1,18 +1,19 @@
 <script>
 	import { onMount } from 'svelte';
+	import TagSelector from '$lib/components/TagSelector.svelte';
 
 	let accounts = $state([]);
-	let tags = $state([]);
 	let loading = $state(true);
 	let showModal = $state(false);
 	let editingAccount = $state(null);
 
 	let formData = $state({
 		name: '',
-		type: 'asset',
+		type: 'income',
 		currency: 'USD',
+		balance: 0,
 		description: '',
-		tagIds: []
+		tags: []
 	});
 
 	const currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'INR', 'CAD', 'AUD'];
@@ -24,16 +25,9 @@
 	async function loadData() {
 		loading = true;
 		try {
-			const [accountsRes, tagsRes] = await Promise.all([
-				fetch('/api/accounts'),
-				fetch('/api/tags')
-			]);
-
+			const accountsRes = await fetch('/api/accounts');
 			if (accountsRes.ok) {
 				accounts = await accountsRes.json();
-			}
-			if (tagsRes.ok) {
-				tags = await tagsRes.json();
 			}
 		} catch (error) {
 			console.error('Error loading data:', error);
@@ -49,17 +43,19 @@
 				name: account.name,
 				type: account.type,
 				currency: account.currency,
+				balance: account.balance || 0,
 				description: account.description || '',
-				tagIds: account.tags ? account.tags.map(t => t.id) : []
+				tags: account.tags || []
 			};
 		} else {
 			editingAccount = null;
 			formData = {
 				name: '',
-				type: 'asset',
+				type: 'income',
 				currency: 'USD',
+				balance: 0,
 				description: '',
-				tagIds: []
+				tags: []
 			};
 		}
 		showModal = true;
@@ -119,12 +115,8 @@
 		}
 	}
 
-	function toggleTag(tagId) {
-		if (formData.tagIds.includes(tagId)) {
-			formData.tagIds = formData.tagIds.filter(id => id !== tagId);
-		} else {
-			formData.tagIds = [...formData.tagIds, tagId];
-		}
+	function handleTagsChange(newTags) {
+		formData.tags = newTags;
 	}
 
 	function formatCurrency(amount, currency = 'USD') {
@@ -149,52 +141,54 @@
 		</div>
 	{:else}
 		<div class="card">
-			<table style="width: 100%; border-collapse: collapse;">
-				<thead>
-					<tr style="border-bottom: 2px solid #e5e7eb;">
-						<th style="text-align: left; padding: 1rem;">Name</th>
-						<th style="text-align: left; padding: 1rem;">Type</th>
-						<th style="text-align: left; padding: 1rem;">Currency</th>
-						<th style="text-align: right; padding: 1rem;">Balance</th>
-						<th style="text-align: left; padding: 1rem;">Tags</th>
-						<th style="text-align: right; padding: 1rem;">Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each accounts as account}
-						<tr style="border-bottom: 1px solid #e5e7eb;">
-							<td style="padding: 1rem;">
-								<div style="font-weight: 500;">{account.name}</div>
-								{#if account.description}
-									<div style="font-size: 0.875rem; color: #6b7280;">{account.description}</div>
-								{/if}
-							</td>
-							<td style="padding: 1rem; text-transform: capitalize;">{account.type}</td>
-							<td style="padding: 1rem;">{account.currency}</td>
-							<td style="padding: 1rem; text-align: right; font-weight: 600;">
-								{formatCurrency(account.balance, account.currency)}
-							</td>
-							<td style="padding: 1rem;">
-								{#if account.tags && account.tags.length > 0}
-									{#each account.tags as tag}
-										<span class="tag" style="background-color: {tag.color}20; color: {tag.color};">
-											{tag.name}
-										</span>
-									{/each}
-								{/if}
-							</td>
-							<td style="padding: 1rem; text-align: right;">
-								<button class="secondary" style="padding: 0.5rem 1rem; margin-right: 0.5rem;" onclick={() => openModal(account)}>
-									Edit
-								</button>
-								<button class="danger" style="padding: 0.5rem 1rem;" onclick={() => deleteAccount(account.id)}>
-									Delete
-								</button>
-							</td>
+			<div class="table-container">
+				<table>
+					<thead>
+						<tr>
+							<th>Name</th>
+							<th>Type</th>
+							<th>Currency</th>
+							<th style="text-align: right;">Balance</th>
+							<th>Tags</th>
+							<th style="text-align: right;">Actions</th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{#each accounts as account}
+							<tr>
+								<td>
+									<div style="font-weight: 500;">{account.name}</div>
+									{#if account.description}
+										<div style="font-size: 0.875rem; color: #6b7280;">{account.description}</div>
+									{/if}
+								</td>
+								<td style="text-transform: capitalize;">{account.type}</td>
+								<td>{account.currency}</td>
+								<td style="text-align: right; font-weight: 600;">
+									{formatCurrency(account.balance, account.currency)}
+								</td>
+								<td>
+									{#if account.tags && account.tags.length > 0}
+										{#each account.tags as tag}
+											<span class="tag" style="background-color: #3b82f620; color: #3b82f6;">
+												{tag}
+											</span>
+										{/each}
+									{/if}
+								</td>
+								<td style="text-align: right;">
+									<button class="secondary" style="padding: 0.5rem 1rem; margin-right: 0.5rem;" onclick={() => openModal(account)}>
+										Edit
+									</button>
+									<button class="danger" style="padding: 0.5rem 1rem;" onclick={() => deleteAccount(account.id)}>
+										Delete
+									</button>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		</div>
 	{/if}
 </div>
@@ -221,7 +215,6 @@
 				<div class="form-group">
 					<label for="type">Account Type *</label>
 					<select id="type" bind:value={formData.type} required>
-						<option value="asset">Asset</option>
 						<option value="income">Income</option>
 						<option value="expense">Expense</option>
 					</select>
@@ -237,6 +230,17 @@
 				</div>
 
 				<div class="form-group">
+					<label for="balance">Initial Amount *</label>
+					<input
+						type="number"
+						id="balance"
+						bind:value={formData.balance}
+						step="0.01"
+						required
+					/>
+				</div>
+
+				<div class="form-group">
 					<label for="description">Description</label>
 					<textarea
 						id="description"
@@ -244,23 +248,10 @@
 					></textarea>
 				</div>
 
-				{#if tags.length > 0}
-					<div class="form-group">
-						<label>Tags</label>
-						<div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-							{#each tags as tag}
-								<button
-									type="button"
-									class="tag"
-									style="background-color: {formData.tagIds.includes(tag.id) ? tag.color : tag.color + '20'}; color: {formData.tagIds.includes(tag.id) ? 'white' : tag.color}; cursor: pointer; border: none;"
-									onclick={() => toggleTag(tag.id)}
-								>
-									{tag.name}
-								</button>
-							{/each}
-						</div>
-					</div>
-				{/if}
+				<TagSelector
+					tags={formData.tags}
+					onTagsChange={handleTagsChange}
+				/>
 
 				<div class="button-group">
 					<button type="submit">

@@ -1,9 +1,9 @@
 <script>
 	import { onMount } from 'svelte';
+	import TagSelector from '$lib/components/TagSelector.svelte';
 
 	let transactions = $state([]);
 	let accounts = $state([]);
-	let tags = $state([]);
 	let loading = $state(true);
 	let showModal = $state(false);
 
@@ -14,7 +14,7 @@
 		toAccountId: '',
 		description: '',
 		transactionDate: new Date().toISOString().split('T')[0],
-		tagIds: []
+		tags: []
 	});
 
 	onMount(async () => {
@@ -24,10 +24,9 @@
 	async function loadData() {
 		loading = true;
 		try {
-			const [transactionsRes, accountsRes, tagsRes] = await Promise.all([
+			const [transactionsRes, accountsRes] = await Promise.all([
 				fetch('/api/transactions'),
-				fetch('/api/accounts'),
-				fetch('/api/tags')
+				fetch('/api/accounts')
 			]);
 
 			if (transactionsRes.ok) {
@@ -35,9 +34,6 @@
 			}
 			if (accountsRes.ok) {
 				accounts = await accountsRes.json();
-			}
-			if (tagsRes.ok) {
-				tags = await tagsRes.json();
 			}
 		} catch (error) {
 			console.error('Error loading data:', error);
@@ -54,7 +50,7 @@
 			toAccountId: '',
 			description: '',
 			transactionDate: new Date().toISOString().split('T')[0],
-			tagIds: []
+			tags: []
 		};
 		showModal = true;
 	}
@@ -65,10 +61,17 @@
 
 	async function saveTransaction() {
 		try {
+			// Convert empty strings to null for UUID fields
+			const payload = {
+				...formData,
+				fromAccountId: formData.fromAccountId || null,
+				toAccountId: formData.toAccountId || null
+			};
+
 			const res = await fetch('/api/transactions', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(formData)
+				body: JSON.stringify(payload)
 			});
 
 			if (res.ok) {
@@ -106,12 +109,8 @@
 		}
 	}
 
-	function toggleTag(tagId) {
-		if (formData.tagIds.includes(tagId)) {
-			formData.tagIds = formData.tagIds.filter(id => id !== tagId);
-		} else {
-			formData.tagIds = [...formData.tagIds, tagId];
-		}
+	function handleTagsChange(newTags) {
+		formData.tags = newTags;
 	}
 
 	function formatCurrency(amount, currency = 'USD') {
@@ -125,17 +124,8 @@
 		return new Date(dateString).toLocaleDateString();
 	}
 
-	// Get filtered accounts based on transaction type
+	// Get all accounts - no type restrictions
 	function getAvailableAccounts(type, field) {
-		if (type === 'deposit' && field === 'to') {
-			return accounts.filter(a => a.type === 'asset');
-		}
-		if (type === 'expense' && field === 'from') {
-			return accounts.filter(a => a.type === 'asset');
-		}
-		if (type === 'transfer') {
-			return accounts.filter(a => a.type === 'asset');
-		}
 		return accounts;
 	}
 </script>
@@ -171,8 +161,8 @@
 							{#if transaction.tags && transaction.tags.length > 0}
 								<div style="margin-top: 0.5rem;">
 									{#each transaction.tags as tag}
-										<span class="tag" style="background-color: {tag.color}20; color: {tag.color};">
-											{tag.name}
+										<span class="tag" style="background-color: #3b82f620; color: #3b82f6;">
+											{tag}
 										</span>
 									{/each}
 								</div>
@@ -213,7 +203,7 @@
 
 				{#if formData.type === 'deposit'}
 					<div class="form-group">
-						<label for="toAccount">To Account (Asset) *</label>
+						<label for="toAccount">To Account *</label>
 						<select id="toAccount" bind:value={formData.toAccountId} required>
 							<option value="">Select account</option>
 							{#each getAvailableAccounts('deposit', 'to') as account}
@@ -223,7 +213,7 @@
 					</div>
 				{:else if formData.type === 'expense'}
 					<div class="form-group">
-						<label for="fromAccount">From Account (Asset) *</label>
+						<label for="fromAccount">From Account *</label>
 						<select id="fromAccount" bind:value={formData.fromAccountId} required>
 							<option value="">Select account</option>
 							{#each getAvailableAccounts('expense', 'from') as account}
@@ -283,23 +273,10 @@
 					></textarea>
 				</div>
 
-				{#if tags.length > 0}
-					<div class="form-group">
-						<label>Tags</label>
-						<div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-							{#each tags as tag}
-								<button
-									type="button"
-									class="tag"
-									style="background-color: {formData.tagIds.includes(tag.id) ? tag.color : tag.color + '20'}; color: {formData.tagIds.includes(tag.id) ? 'white' : tag.color}; cursor: pointer; border: none;"
-									onclick={() => toggleTag(tag.id)}
-								>
-									{tag.name}
-								</button>
-							{/each}
-						</div>
-					</div>
-				{/if}
+				<TagSelector
+					tags={formData.tags}
+					onTagsChange={handleTagsChange}
+				/>
 
 				<div class="button-group">
 					<button type="submit">Create Transaction</button>
